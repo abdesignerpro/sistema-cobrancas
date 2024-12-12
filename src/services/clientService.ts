@@ -1,21 +1,10 @@
+import { Client } from '../types';
 import { parseDate, formatDateBR } from '../utils/dateUtils';
 import { formatDateTime } from '../utils/dateTimeUtils';
 
-interface Client {
-  id: number;
-  name: string;
-  phone: string;
-  service: string;
-  value: number;
-  dueDate: string;
-  status: string;
-  pixKey?: string;
-  pixQRCode?: string;
-}
-
 const CLIENTS_KEY = '@sistema-cobrancas/clients';
 
-const updateClientStatus = (client: any): string => {
+const updateClientStatus = (client: Client): string => {
   if (!client.dueDate) return 'Pendente';
   
   const now = new Date();
@@ -34,150 +23,116 @@ const updateClientStatus = (client: any): string => {
   return 'Pendente';
 };
 
-export const clientService = {
-  getClients: (): Client[] => {
-    try {
-      const clientsStr = localStorage.getItem(CLIENTS_KEY);
-      if (!clientsStr) return [];
-      
-      const clients = JSON.parse(clientsStr);
-      
-      // Atualiza o status de todos os clientes antes de retornar
-      const updatedClients = clients.map((client: any) => ({
-        ...client,
-        status: updateClientStatus(client)
-      }));
-      
-      // Salva os clientes com status atualizados
-      localStorage.setItem(CLIENTS_KEY, JSON.stringify(updatedClients));
-      
-      return updatedClients;
-    } catch (error) {
-      console.error('Erro ao carregar clientes:', error);
-      return [];
-    }
-  },
+const getClients = (): Client[] => {
+  const clientsJson = localStorage.getItem(CLIENTS_KEY);
+  return clientsJson ? JSON.parse(clientsJson) : [];
+};
 
-  saveClient: async (client: Omit<Client, 'id' | 'status'>): Promise<Client> => {
-    try {
-      const clients = clientService.getClients();
-      
-      const newClient: Client = {
-        ...client,
-        id: Date.now(),
-        status: 'Pendente',
-        dueDate: client.dueDate // Mantém a data ISO como está
-      };
+const saveClients = (clients: Client[]): void => {
+  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+};
 
-      clients.push(newClient);
-      localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
-      
-      return newClient;
-    } catch (error) {
-      console.error('Erro ao salvar cliente:', error);
-      throw error;
-    }
-  },
+const addClient = (client: Omit<Client, 'id' | 'status'>): void => {
+  const clients = getClients();
+  const newClient: Client = {
+    ...client,
+    id: crypto.randomUUID(),
+    status: 'Pendente',
+    automaticMessage: true,
+    dueTime: client.dueTime || '00:00'
+  };
+  clients.push(newClient);
+  saveClients(clients);
+};
 
-  updateClient: async (client: Client): Promise<Client> => {
-    try {
-      const clients = clientService.getClients();
-      const index = clients.findIndex(c => c.id === client.id);
+const updateClient = (updatedClient: Client): void => {
+  const clients = getClients();
+  const index = clients.findIndex(client => client.id === updatedClient.id);
+  if (index !== -1) {
+    clients[index] = updatedClient;
+    saveClients(clients);
+  }
+};
+
+const deleteClient = (clientId: string): void => {
+  const clients = getClients();
+  const filteredClients = clients.filter(client => client.id !== clientId);
+  saveClients(filteredClients);
+};
+
+const updateClientStatuses = () => {
+  try {
+    const clients = getClients();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const updatedClients = clients.map(client => {
+      // Não atualiza se já tiver mensagem enviada
+      if (client.status === 'Mensagem Enviada') {
+        return client;
+      }
+
+      if (!client.dueDate) return client;
+
+      const dueDate = new Date(client.dueDate);
+      dueDate.setMinutes(dueDate.getMinutes() + dueDate.getTimezoneOffset());
+      dueDate.setHours(0, 0, 0, 0);
       
-      if (index === -1) {
-        throw new Error('Cliente não encontrado');
+      if (dueDate < today) {
+        client.status = 'Atrasado';
+      } else if (dueDate.toDateString() === today.toDateString()) {
+        client.status = 'Pendente';
+      } else {
+        client.status = 'Em dia';
       }
       
-      // Mantém a data ISO como está
-      clients[index] = {
-        ...client,
-        dueDate: client.dueDate
-      };
-      
-      localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
-      
-      return clients[index];
-    } catch (error) {
-      console.error('Erro ao atualizar cliente:', error);
-      throw error;
-    }
-  },
+      return client;
+    });
 
-  deleteClient: (clientId: number): void => {
-    try {
-      const clients = clientService.getClients();
-      const updatedClients = clients.filter((c: Client) => c.id !== clientId);
-      localStorage.setItem(CLIENTS_KEY, JSON.stringify(updatedClients));
-    } catch (error) {
-      console.error('Erro ao excluir cliente:', error);
-    }
-  },
-
-  updateClientStatuses: () => {
-    try {
-      const clients = clientService.getClients();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const updatedClients = clients.map(client => {
-        // Não atualiza se já tiver mensagem enviada
-        if (client.status === 'Mensagem Enviada') {
-          return client;
-        }
-
-        if (!client.dueDate) return client;
-
-        const dueDate = new Date(client.dueDate);
-        dueDate.setMinutes(dueDate.getMinutes() + dueDate.getTimezoneOffset());
-        dueDate.setHours(0, 0, 0, 0);
-        
-        if (dueDate < today) {
-          client.status = 'Atrasado';
-        } else if (dueDate.toDateString() === today.toDateString()) {
-          client.status = 'Pendente';
-        } else {
-          client.status = 'Em dia';
-        }
-        
-        return client;
-      });
-
-      localStorage.setItem(CLIENTS_KEY, JSON.stringify(updatedClients));
-      return updatedClients;
-    } catch (error) {
-      console.error('Erro ao atualizar status dos clientes:', error);
-    }
-  },
-
-  checkClientStatuses: (): void => {
-    try {
-      const clients = clientService.getClients();
-      const today = new Date();
-
-      const updatedClients = clients.map(client => {
-        // Não atualiza se já tiver mensagem enviada
-        if (client.status === 'Mensagem Enviada') {
-          return client;
-        }
-
-        if (!client.dueDate) return client;
-
-        const dueDate = new Date(client.dueDate);
-        
-        if (dueDate < today) {
-          client.status = 'Atrasado';
-        } else if (dueDate.toDateString() === today.toDateString()) {
-          client.status = 'Pendente';
-        } else {
-          client.status = 'Em dia';
-        }
-        
-        return client;
-      });
-
-      localStorage.setItem(CLIENTS_KEY, JSON.stringify(updatedClients));
-    } catch (error) {
-      console.error('Erro ao verificar status dos clientes:', error);
-    }
+    localStorage.setItem(CLIENTS_KEY, JSON.stringify(updatedClients));
+    return updatedClients;
+  } catch (error) {
+    console.error('Erro ao atualizar status dos clientes:', error);
   }
+};
+
+const checkClientStatuses = (): void => {
+  try {
+    const clients = getClients();
+    const today = new Date();
+
+    const updatedClients = clients.map(client => {
+      // Não atualiza se já tiver mensagem enviada
+      if (client.status === 'Mensagem Enviada') {
+        return client;
+      }
+
+      if (!client.dueDate) return client;
+
+      const dueDate = new Date(client.dueDate);
+      
+      if (dueDate < today) {
+        client.status = 'Atrasado';
+      } else if (dueDate.toDateString() === today.toDateString()) {
+        client.status = 'Pendente';
+      } else {
+        client.status = 'Em dia';
+      }
+      
+      return client;
+    });
+
+    localStorage.setItem(CLIENTS_KEY, JSON.stringify(updatedClients));
+  } catch (error) {
+    console.error('Erro ao verificar status dos clientes:', error);
+  }
+};
+
+export const clientService = {
+  getClients,
+  addClient,
+  updateClient,
+  deleteClient,
+  updateClientStatuses,
+  checkClientStatuses
 };

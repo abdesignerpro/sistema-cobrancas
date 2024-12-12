@@ -1,21 +1,23 @@
 import { useState, useEffect } from 'react';
+import { messageService, defaultConfig } from '../services/messageService';
+import { MessageConfig } from '../types';
 import {
   Box,
-  TextField,
   Button,
-  Paper,
+  TextField,
   Typography,
-  Grid,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
+  Grid,
   Switch,
   FormControlLabel,
   Snackbar,
   Alert,
+  SelectChangeEvent,
+  Paper
 } from '@mui/material';
-import { MessageConfig, messageService } from '../services/messageService';
 
 const DEFAULT_MESSAGE_TEMPLATE = `🔔 *Lembrete de Pagamento*\n\n` +
   `Olá {nome}! Segue sua fatura para o serviço:\n\n` +
@@ -33,31 +35,49 @@ const DEFAULT_MESSAGE_TEMPLATE = `🔔 *Lembrete de Pagamento*\n\n` +
   `🙏 Agradecemos a preferência!`;
 
 export default function AutomaticSending() {
-  const [config, setConfig] = useState<MessageConfig>(messageService.getConfig());
+  const [config, setConfig] = useState<MessageConfig>(defaultConfig);
   const [showSuccess, setShowSuccess] = useState(false);
   const [testMessages, setTestMessages] = useState<{ mainMessage: string; reminderMessage?: string } | null>(null);
   const [phone, setPhone] = useState('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; error?: string } | null>(null);
 
-  const handleChange = (field: keyof MessageConfig) => (
-    event: React.ChangeEvent<HTMLInputElement | { value: unknown }>
-  ) => {
-    const value = event.target.type === 'checkbox' 
-      ? (event.target as HTMLInputElement).checked 
-      : event.target.value;
-    setConfig({ ...config, [field]: value });
+  useEffect(() => {
+    const savedConfig = messageService.getConfig();
+    setConfig(savedConfig);
+  }, []);
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = event.target;
+    setConfig((prev: MessageConfig) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSelectChange = (event: SelectChangeEvent<number>, field: keyof MessageConfig) => {
+    setConfig((prev: MessageConfig) => ({
+      ...prev,
+      [field]: Number(event.target.value)
+    }));
+  };
+
+  const handleSave = () => {
     messageService.saveConfig(config);
     setShowSuccess(true);
   };
 
+  const handleCloseSuccess = () => {
+    setShowSuccess(false);
+  };
+
   const handleTest = async () => {
-    const messages = await messageService.testMessages(config);
-    setTestMessages(messages);
+    try {
+      const result = await messageService.testMessages(config);
+      setTestMessages(result);
+    } catch (error) {
+      console.error('Erro ao testar mensagens:', error);
+    }
   };
 
   const handleSendTest = async () => {
@@ -93,156 +113,147 @@ export default function AutomaticSending() {
   };
 
   return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
         Configuração de Mensagens Automáticas
       </Typography>
 
-      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Mensagem de Cobrança
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            label="Template da Mensagem Principal"
+            name="messageTemplate"
+            value={config.messageTemplate}
+            onChange={handleInputChange}
+            multiline
+            rows={4}
+            placeholder={defaultConfig.chargeTemplate}
+          />
+        </Grid>
+
+        <Grid item xs={12}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={config.sendReminder}
+                onChange={handleInputChange}
+                name="sendReminder"
+              />
+            }
+            label="Enviar Lembrete"
+          />
+        </Grid>
+
+        {config.sendReminder && (
+          <>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
+                label="Template do Lembrete"
+                name="reminderMessage"
+                value={config.reminderMessage}
+                onChange={handleInputChange}
                 multiline
-                rows={8}
-                label="Template da Mensagem de Cobrança"
-                value={config.chargeTemplate}
-                onChange={handleChange('chargeTemplate')}
-                helperText="Use {nome}, {servico}, {valor}, {dias} como variáveis"
+                rows={4}
               />
-              <Button
-                variant="outlined"
-                onClick={() => {
-                  const newConfig = { ...config, chargeTemplate: messageService.DEFAULT_CHARGE_TEMPLATE };
-                  setConfig(newConfig);
-                  messageService.saveConfig(newConfig);
-                  setShowSuccess(true);
-                }}
-                sx={{ mt: 1 }}
-              >
-                Restaurar Padrão
-              </Button>
-            </Box>
-          </Grid>
-        </Grid>
+            </Grid>
 
-        <Typography variant="h6" sx={{ mt: 4 }} gutterBottom>
-          Lembretes Automáticos
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
-              <InputLabel>Dias Antes do Vencimento</InputLabel>
-              <Select
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Dias antes do vencimento"
+                name="daysBeforeDue"
                 value={config.daysBeforeDue}
-                label="Dias Antes do Vencimento"
-                onChange={handleChange('daysBeforeDue')}
-              >
-                {[1, 2, 3, 5, 7, 10].map((days) => (
-                  <MenuItem key={days} value={days}>{days} dias</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              label="Modelo de Mensagem"
-              value={config.messageTemplate}
-              onChange={handleChange('messageTemplate')}
-              helperText="Use {nome}, {servico}, {dias}, {valor} como variáveis"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={config.sendReminder}
-                  onChange={handleChange('sendReminder')}
-                />
-              }
-              label="Enviar lembrete adicional"
-            />
-          </Grid>
-          {config.sendReminder && (
-            <>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Dias do Lembrete</InputLabel>
-                  <Select
-                    value={config.reminderDays}
-                    label="Dias do Lembrete"
-                    onChange={handleChange('reminderDays')}
-                  >
-                    {[0, 1, 2].map((days) => (
-                      <MenuItem key={days} value={days}>
-                        {days === 0 ? 'No dia' : `${days} dia${days > 1 ? 's' : ''}`}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  label="Mensagem do Lembrete"
-                  value={config.reminderMessage}
-                  onChange={handleChange('reminderMessage')}
-                  helperText="Use {nome}, {servico}, {dias}, {valor} como variáveis"
-                />
-              </Grid>
-            </>
-          )}
-        </Grid>
-        <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-          >
-            Salvar Configurações
-          </Button>
-          <Button
-            variant="outlined"
-            color="info"
-            onClick={handleTest}
-          >
-            Testar Mensagens
-          </Button>
-        </Box>
-      </Box>
+                onChange={handleInputChange}
+              />
+            </Grid>
 
-      {testMessages && (
-        <Paper sx={{ mt: 3, p: 2, bgcolor: 'grey.100' }}>
-          <Typography variant="h6" gutterBottom>
-            Prévia das Mensagens
-          </Typography>
-          <Typography variant="subtitle1" gutterBottom>
-            Mensagem Principal:
-          </Typography>
-          <Typography paragraph sx={{ whiteSpace: 'pre-wrap' }}>
-            {testMessages.mainMessage}
-          </Typography>
-          
-          {testMessages.reminderMessage && (
-            <>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Dias para lembrete"
+                name="reminderDays"
+                value={config.reminderDays}
+                onChange={handleInputChange}
+              />
+            </Grid>
+          </>
+        )}
+
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel>Hora do Envio</InputLabel>
+            <Select<number>
+              value={config.hour}
+              onChange={(e) => handleSelectChange(e, 'hour')}
+              label="Hora do Envio"
+            >
+              {Array.from({ length: 24 }, (_, i) => (
+                <MenuItem key={i} value={i}>{i.toString().padStart(2, '0')}:00</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel>Minuto do Envio</InputLabel>
+            <Select<number>
+              value={config.minute}
+              onChange={(e) => handleSelectChange(e, 'minute')}
+              label="Minuto do Envio"
+            >
+              {Array.from({ length: 60 }, (_, i) => (
+                <MenuItem key={i} value={i}>{i.toString().padStart(2, '0')}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+            <Button variant="contained" onClick={handleSave}>
+              Salvar Configurações
+            </Button>
+            <Button variant="outlined" onClick={handleTest}>
+              Testar Mensagens
+            </Button>
+            <Button variant="outlined" onClick={handleResetTemplate}>
+              Restaurar Padrão
+            </Button>
+          </Box>
+        </Grid>
+
+        {testMessages && (
+          <Grid item xs={12}>
+            <Paper sx={{ mt: 3, p: 2, bgcolor: 'grey.100' }}>
+              <Typography variant="h6" gutterBottom>
+                Prévia das Mensagens
+              </Typography>
               <Typography variant="subtitle1" gutterBottom>
-                Mensagem de Lembrete:
+                Mensagem Principal:
               </Typography>
               <Typography paragraph sx={{ whiteSpace: 'pre-wrap' }}>
-                {testMessages.reminderMessage}
+                {testMessages.mainMessage}
               </Typography>
-            </>
-          )}
+              {testMessages.reminderMessage && (
+                <>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Mensagem de Lembrete:
+                  </Typography>
+                  <Typography paragraph sx={{ whiteSpace: 'pre-wrap' }}>
+                    {testMessages.reminderMessage}
+                  </Typography>
+                </>
+              )}
+            </Paper>
+          </Grid>
+        )}
 
+        <Grid item xs={12}>
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle1" gutterBottom>
               Enviar mensagem de teste:
@@ -276,18 +287,18 @@ export default function AutomaticSending() {
               </Alert>
             )}
           </Box>
-        </Paper>
-      )}
+        </Grid>
+      </Grid>
 
       <Snackbar
         open={showSuccess}
         autoHideDuration={6000}
-        onClose={() => setShowSuccess(false)}
+        onClose={handleCloseSuccess}
       >
-        <Alert severity="success" onClose={() => setShowSuccess(false)}>
+        <Alert onClose={handleCloseSuccess} severity="success">
           Configurações salvas com sucesso!
         </Alert>
       </Snackbar>
-    </Paper>
+    </Box>
   );
 }

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { messageService } from './messageService';
+import { Client } from '../types';
 
 const getEvolutionApi = () => {
   const apiUrl = localStorage.getItem('apiUrl') || 'https://evolution.abdesignerpro.com.br';
@@ -137,39 +138,24 @@ export const sendPixQRCode = async (phone: string, value: number) => {
   }
 };
 
-export const sendPaymentRequest = async (phone: string, value: number, serviceName: string, clientName: string) => {
+export const sendPaymentRequest = async (client: Client): Promise<void> => {
   try {
-    const formattedNumber = formatPhoneNumber(phone);
+    const message = `Olá ${client.name}, tudo bem?
 
-    // Obtém o template configurado e formata a mensagem
-    const config = messageService.getConfig();
-    const mensagemCobranca = messageService.processTemplate(config.chargeTemplate, {
-      nome: clientName,
-      servico: serviceName,
-      valor: value,
-      dias: new Date().toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    });
+Passando para lembrar sobre o pagamento do serviço: ${client.service}
+Valor: ${client.value.toLocaleString('pt-BR', {
+  style: 'currency',
+  currency: 'BRL'
+})}
+Vencimento: ${client.dueDate}
 
-    console.log('Enviando cobrança:');
-    console.log('- Número:', formattedNumber);
-    console.log('- Cliente:', clientName);
-    console.log('- Serviço:', serviceName);
-    console.log('- Valor:', value);
+Por favor, me avise quando realizar o pagamento para que eu possa dar baixa no sistema.
 
-    // Envia a mensagem de cobrança
-    await sendMessage(formattedNumber, mensagemCobranca);
+Agradeço a atenção!`;
 
-    // Envia o QR Code PIX
-    await sendPixQRCode(formattedNumber, value);
-
+    console.log(`Enviando mensagem para ${client.phone}:`, message);
   } catch (error) {
-    console.error('Erro ao enviar cobrança:', error);
+    console.error('Erro ao enviar mensagem:', error);
     throw error;
   }
 };

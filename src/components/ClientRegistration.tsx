@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Client } from '../types';
 import {
   Box,
   Typography,
@@ -15,6 +16,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  SelectChangeEvent
 } from '@mui/material';
 import { clientService } from '../services/clientService';
 import { messageService } from '../services/messageService';
@@ -41,15 +43,20 @@ const getCurrentTime = () => {
 export default function ClientRegistration() {
   const navigate = useNavigate();
   const [showSuccess, setShowSuccess] = useState(false);
-  const [formData, setFormData] = useState({
+
+  const initialFormData: Omit<Client, 'id' | 'status'> = {
     name: '',
-    phone: '',
     service: '',
-    value: '',
-    dueDate: getCurrentDate(),
-    dueTime: getCurrentTime(),
-    automaticMessage: true
-  });
+    value: 0,
+    dueDate: '',
+    dueTime: '',
+    phone: '',
+    automaticMessage: true,
+    pixKey: '',
+    pixQRCode: ''
+  };
+
+  const [formData, setFormData] = useState<Omit<Client, 'id' | 'status'>>(initialFormData);
 
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [newService, setNewService] = useState('');
@@ -76,8 +83,8 @@ export default function ClientRegistration() {
     return '55' + numbers;
   };
 
-  const handleServiceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+  const handleServiceChange = (event: SelectChangeEvent) => {
+    const value = event.target.value;
     if (value === 'new') {
       setShowNewService(true);
     } else {
@@ -97,45 +104,12 @@ export default function ClientRegistration() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
     try {
-      // Formata o telefone antes de salvar
-      const formattedPhone = formatPhoneForSubmit(formData.phone);
-
-      // Converte a data para o formato ISO
-      const [year, month, day] = formData.dueDate.split('-');
-      const [hours, minutes] = formData.dueTime.split(':');
-      
-      const dueDate = new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-        parseInt(hours),
-        parseInt(minutes)
-      );
-
-      // Salva o cliente
-      await clientService.saveClient({
-        name: formData.name,
-        phone: formattedPhone,
-        service: formData.service,
-        value: parseFloat(formData.value),
-        dueDate: dueDate.toISOString(),
-        automaticMessage: formData.automaticMessage
-      });
-
+      clientService.addClient(formData);
       setShowSuccess(true);
       
       // Limpa o formulário
-      setFormData({
-        name: '',
-        phone: '',
-        service: '',
-        value: '',
-        dueDate: getCurrentDate(),
-        dueTime: getCurrentTime(),
-        automaticMessage: true
-      });
+      setFormData(initialFormData);
 
       // Redireciona para a lista de clientes após 2 segundos
       setTimeout(() => {
@@ -144,6 +118,10 @@ export default function ClientRegistration() {
     } catch (error) {
       console.error('Erro ao salvar cliente:', error);
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   return (
@@ -159,10 +137,13 @@ export default function ClientRegistration() {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Nome do Cliente"
+                  label="Nome"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={handleInputChange}
+                  placeholder="Nome do cliente"
+                  helperText="Nome completo do cliente"
                   required
+                  inputProps={{ maxLength: 100 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -174,7 +155,7 @@ export default function ClientRegistration() {
                   placeholder="(83) 99999-9999"
                   helperText="Digite o número com DDD e país"
                   required
-                  maxLength={15}
+                  inputProps={{ maxLength: 15 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -219,7 +200,8 @@ export default function ClientRegistration() {
                   label="Valor"
                   type="number"
                   value={formData.value}
-                  onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                  onChange={handleInputChange}
+                  name="value"
                   InputProps={{
                     startAdornment: <InputAdornment position="start">R$</InputAdornment>,
                   }}
@@ -232,7 +214,8 @@ export default function ClientRegistration() {
                   label="Data de Vencimento"
                   type="date"
                   value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  onChange={handleInputChange}
+                  name="dueDate"
                   required
                   InputLabelProps={{
                     shrink: true,
@@ -245,7 +228,8 @@ export default function ClientRegistration() {
                   label="Hora de Vencimento"
                   type="time"
                   value={formData.dueTime}
-                  onChange={(e) => setFormData({ ...formData, dueTime: e.target.value })}
+                  onChange={handleInputChange}
+                  name="dueTime"
                   required
                   InputLabelProps={{
                     shrink: true,

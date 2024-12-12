@@ -10,7 +10,8 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  SelectChangeEvent
 } from '@mui/material';
 import { formatForInput } from '../utils/dateUtils';
 import { serviceOptionsService, type ServiceOption } from '../services/serviceOptionsService';
@@ -83,8 +84,8 @@ export default function EditClientDialog({ open, client, onSave, onClose }: Edit
     setFormData(prev => ({ ...prev, phone: value }));
   };
 
-  const handleServiceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+  const handleServiceChange = (event: SelectChangeEvent) => {
+    const value = event.target.value;
     if (value === 'new') {
       setShowNewService(true);
     } else {
@@ -143,7 +144,9 @@ export default function EditClientDialog({ open, client, onSave, onClose }: Edit
               fullWidth
               value={formData.name}
               onChange={handleChange}
+              placeholder="Nome do cliente"
               required
+              inputProps={{ maxLength: 100 }}
             />
             <TextField
               name="phone"
@@ -153,7 +156,7 @@ export default function EditClientDialog({ open, client, onSave, onClose }: Edit
               onChange={handlePhoneChange}
               placeholder="(83) 99999-9999"
               required
-              maxLength={15}
+              inputProps={{ maxLength: 15 }}
             />
             <FormControl fullWidth required>
               <InputLabel>Serviço</InputLabel>

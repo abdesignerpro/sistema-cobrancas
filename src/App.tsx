@@ -7,14 +7,8 @@ import APIConfiguration from './components/APIConfiguration';
 import Dashboard from './components/Dashboard';
 import ClientList from './components/ClientList';
 import { theme } from './theme';
-import { useEffect } from 'react';
-import { messageService } from './services/messageService';
 
 function App() {
-  useEffect(() => {
-    messageService.startAutomaticCheck();
-  }, []);
-
   return (
     <ThemeProvider theme={theme}>
       <Router>
